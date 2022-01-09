@@ -41,29 +41,44 @@ impl<'a> Wegstein<'a> {
         }
     }
 
+    fn apply(
+        &self,
+        x: &Array1<f64>,
+        atol: &ArrayView1<f64>,
+        rtol: &ArrayView1<f64>,
+    ) -> (bool, Array1<f64>) {
+        let y = Array1::from((self.f)(x.as_slice().unwrap()));
+        (
+            Zip::from(&y)
+                .and(x)
+                .and(atol)
+                .and(rtol)
+                .all(|&x1, &x2, &atol, &rtol| {
+                    (x1 - x2).abs() < atol + rtol * x1.abs().max(x2.abs())
+                }),
+            y,
+        )
+    }
+
     pub fn solve(&self, init: &[f64], atol: &[f64], rtol: &[f64]) -> Vec<f64> {
         let atol = ArrayView1::from(atol);
         let rtol = ArrayView1::from(rtol);
         let mut x_prev = ArrayView1::from(init).to_owned();
-        let mut y_prev = Array1::from((self.f)(x_prev.as_slice().unwrap()));
+        let (converged, mut y_prev) = self.apply(&x_prev, &atol, &rtol);
+        if converged {
+            return x_prev.to_vec();
+        }
         let mut x = y_prev.clone();
+
         for _k in 0..self.max_iter {
-            let y = Array1::from((self.f)(x.as_slice().unwrap()));
-            if Zip::from(&y)
-                .and(&x)
-                .and(&atol)
-                .and(&rtol)
-                .all(|&x1, &x2, &atol, &rtol| {
-                    (x1 - x2).abs() < atol + rtol * x1.abs().max(x2.abs())
-                })
-            {
-                return y.to_vec();
+            let (converged, mut y) = self.apply(&x, &atol, &rtol);
+            if converged {
+                return x.to_vec();
             }
-            let s = (&y - &y_prev) / &(&x - &x_prev);
-            let t = s.map(|x| 1. / (1. - x));
-            x_prev = x;
-            y_prev = y;
-            x = &t * &y_prev + (1. - &t) * &x_prev;
+            let t = (&x - &x_prev) / (&x - &y - (&x_prev - &y_prev));
+            std::mem::swap(&mut x, &mut x_prev);
+            std::mem::swap(&mut y, &mut y_prev);
+            x = t * (&y_prev - &x_prev) + &x_prev;
         }
         x.to_vec()
     }

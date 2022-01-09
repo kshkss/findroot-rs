@@ -54,15 +54,40 @@ impl<'a> Broyden<'a> {
         }
     }
 
+    fn apply(
+        &self,
+        x: &Array1<f64>,
+        atol: &ArrayView1<f64>,
+        rtol: &ArrayView1<f64>,
+    ) -> (bool, Array1<f64>) {
+        let y = Array1::from((self.f)(x.as_slice().unwrap()));
+        (
+            Zip::from(&y)
+                .and(x)
+                .and(atol)
+                .and(rtol)
+                .all(|&x1, &x2, &atol, &rtol| {
+                    (x1 - x2).abs() < atol + rtol * x1.abs().max(x2.abs())
+                }),
+            y,
+        )
+    }
+
     pub fn solve(&self, init: &[f64], atol: &[f64], rtol: &[f64]) -> Vec<f64> {
         let atol = ArrayView1::from(atol);
         let rtol = ArrayView1::from(rtol);
         let mut x_prev = ArrayView1::from(init).to_owned(); // x0
-        let mut y_prev = Array1::from((self.f)(x_prev.as_slice().unwrap())); // x1
+        let (converged, mut y_prev) = self.apply(&x_prev, &atol, &rtol); // x2
+        if converged {
+            return x_prev.to_vec();
+        }
         let mut x = y_prev.clone(); // x1
 
         let mut jac_inv = {
-            let mut y = Array1::from((self.f)(x.as_slice().unwrap())); // x2
+            let (converged, mut y) = self.apply(&x, &atol, &rtol); // x2
+            if converged {
+                return x.to_vec();
+            }
             let x0 = &x_prev;
             let x1 = &y_prev;
             let x2 = &y;
@@ -75,26 +100,18 @@ impl<'a> Broyden<'a> {
         };
 
         for _k in 1..self.max_iter {
-            let mut y = Array1::from((self.f)(x.as_slice().unwrap()));
+            let (converged, mut y) = self.apply(&x, &atol, &rtol);
+            if converged {
+                return x.to_vec();
+            }
             let dx = &x - &x_prev;
             let df = (&x - &y) - &(&x_prev - &y_prev);
             let a = (&dx - &jac_inv.dot(&df)).into_shape([dx.len(), 1]).unwrap();
             let b = df.clone().into_shape([1, df.len()]).unwrap();
-            jac_inv =  a.dot(&b) / df.dot(&df) + &jac_inv;
+            jac_inv = a.dot(&b) / df.dot(&df) + &jac_inv;
             std::mem::swap(&mut x_prev, &mut x);
             std::mem::swap(&mut y_prev, &mut y);
             x = jac_inv.dot(&(&y_prev - &x_prev)) + &x_prev;
-
-            if Zip::from(&x)
-                .and(&x_prev)
-                .and(&atol)
-                .and(&rtol)
-                .all(|&x1, &x2, &atol, &rtol| {
-                    (x1 - x2).abs() < atol + rtol * x1.abs().max(x2.abs())
-                })
-            {
-                return x.to_vec();
-            }
         }
         x.to_vec()
     }
