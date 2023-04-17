@@ -1,3 +1,5 @@
+pub extern crate ndarray;
+
 mod broyden;
 mod jacobian;
 mod newton;
