@@ -1,3 +1,4 @@
+extern crate thiserror;
 pub extern crate ndarray;
 
 mod broyden;
