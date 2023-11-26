@@ -264,3 +264,28 @@ fn inverse_quadratic_interp(
     let b2 = x2 * y0 * y1 / (y2 - y0) / (y2 - y1);
     b0 + b1 + b2
 }
+
+#[cfg(test)]
+mod tests {
+    use approx::assert_relative_eq;
+
+    use super::{Brentq, UnivariateClosure};
+
+    #[test]
+    fn test_root2() {
+        let r1 = 2_f64.sqrt();
+        let f = |x: f64| x * x - 2.;
+        let solver = Brentq::new().max_iter(14);
+        let r2 = solver.solve(&UnivariateClosure::new(&f), 0., 2.).unwrap();
+        assert_relative_eq!(r1, r2, max_relative = 0.25e-9);
+    }
+
+    #[test]
+    fn test_log10() {
+        let r1 = 10_f64.ln();
+        let f = |x: f64| x.exp() - 10.;
+        let solver = Brentq::new().max_iter(18);
+        let r2 = solver.solve(&UnivariateClosure::new(&f), 1., 10.).unwrap();
+        assert_relative_eq!(r1, r2, max_relative = 0.96e-9);
+    }
+}
