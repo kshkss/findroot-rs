@@ -8,6 +8,7 @@ mod sand;
 mod steffensen;
 pub mod traits;
 mod wegstein;
+mod brent;
 
 pub use broyden::Broyden;
 pub use jacobian::{BandedJacobian, FullJacobian};
